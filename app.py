@@ -19,15 +19,19 @@ from sumy.nlp.tokenizers import Tokenizer
 from sumy.summarizers.lex_rank import LexRankSummarizer
 from googletrans import Translator
 import spacy
-import en_core_web_sm  # Import the spaCy model as a package
 
 # Download required NLTK data for sentiment analysis
 nltk.download('vader_lexicon')
 from nltk.sentiment import SentimentIntensityAnalyzer
 sia = SentimentIntensityAnalyzer()
 
-# Load SpaCy model from en_core_web_sm package
-nlp = en_core_web_sm.load()
+# Attempt to load the spaCy model; if not available, download it using spacy.cli.download
+try:
+    nlp = spacy.load("en_core_web_sm")
+except OSError:
+    import spacy.cli
+    spacy.cli.download("en_core_web_sm")
+    nlp = spacy.load("en_core_web_sm")
 
 # Define the FastAPI app (named 'api' to avoid conflict with Streamlit's UI code)
 api = FastAPI()
