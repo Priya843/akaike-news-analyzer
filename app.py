@@ -7,31 +7,51 @@ import time
 # ----------------- FastAPI Code -----------------
 from fastapi import FastAPI
 from pydantic import BaseModel
-import requests as req  # use a different alias to avoid conflict with Streamlit's requests
+import requests as req  # Use a different alias to avoid conflict with Streamlit's requests
 from bs4 import BeautifulSoup
 from gtts import gTTS
 import os
 from collections import Counter
 import nltk
-from nltk.tokenize import sent_tokenize
+from nltk.tokenize import sent_tokenize, word_tokenize
 from sumy.parsers.plaintext import PlaintextParser
 from sumy.nlp.tokenizers import Tokenizer
 from sumy.summarizers.lex_rank import LexRankSummarizer
 from googletrans import Translator
-import spacy
 
-# Download required NLTK data for sentiment analysis
+# Download required NLTK data for sentiment analysis and NER
 nltk.download('vader_lexicon')
+nltk.download('punkt')
+nltk.download('averaged_perceptron_tagger')
+nltk.download('maxent_ne_chunker')
+nltk.download('words')
 from nltk.sentiment import SentimentIntensityAnalyzer
 sia = SentimentIntensityAnalyzer()
 
-# Attempt to load the spaCy model; if not available, download it using spacy.cli.download
-try:
-    nlp = spacy.load("en_core_web_sm")
-except OSError:
-    import spacy.cli
-    spacy.cli.download("en_core_web_sm")
-    nlp = spacy.load("en_core_web_sm")
+def extract_topics_nltk(text):
+    """
+    Extracts key topics from the given text using NLTK's named entity recognition.
+    It focuses on entities of type PERSON, ORGANIZATION, GPE, and LOCATION.
+    Returns up to 3 unique topics.
+    """
+    tokens = word_tokenize(text)
+    tagged = nltk.pos_tag(tokens)
+    tree = nltk.ne_chunk(tagged)
+    topics = []
+    for subtree in tree:
+        if hasattr(subtree, 'label'):
+            if subtree.label() in ['PERSON', 'ORGANIZATION', 'GPE', 'LOCATION']:
+                entity = " ".join(word for word, tag in subtree.leaves())
+                if len(entity) >= 3 and not entity.isnumeric():
+                    topics.append(entity)
+    # Remove duplicates and return up to 3 topics
+    filtered = []
+    seen = set()
+    for t in topics:
+        if t not in seen:
+            seen.add(t)
+            filtered.append(t)
+    return filtered[:3]
 
 # Define the FastAPI app (named 'api' to avoid conflict with Streamlit's UI code)
 api = FastAPI()
@@ -94,29 +114,6 @@ def analyze_sentiment(text):
         return "Negative"
     else:
         return "Neutral"
-
-def extract_topics_spacy(summary):
-    """
-    Extracts key topics from the article summary using SpaCy's NER.
-    Keeps entities with labels: PERSON, ORG, GPE, LOC, PRODUCT, EVENT.
-    Returns up to 3 unique topics.
-    """
-    doc = nlp(summary)
-    topics = []
-    valid_labels = {"PERSON", "ORG", "GPE", "LOC", "PRODUCT", "EVENT"}
-    for ent in doc.ents:
-        if ent.label_ in valid_labels:
-            text = ent.text.strip()
-            if len(text) < 3 or text.isnumeric():
-                continue
-            topics.append(text)
-    filtered = []
-    seen = set()
-    for t in topics:
-        if t not in seen:
-            seen.add(t)
-            filtered.append(t)
-    return filtered[:3]
 
 def comparative_analysis(articles):
     """
@@ -228,7 +225,7 @@ async def analyze_news_sentiments(data: CompanyRequest):
     API Endpoint that:
       - Fetches news articles,
       - Performs sentiment analysis,
-      - Extracts topics using SpaCy NER,
+      - Extracts topics using NLTK's NE chunker,
       - Generates coverage differences for broader article comparisons,
       - Creates a Hindi summary and converts it to TTS audio.
     """
@@ -239,7 +236,8 @@ async def analyze_news_sentiments(data: CompanyRequest):
     
     for article in articles:
         article["Sentiment"] = analyze_sentiment(article["Summary"])
-        article["Topics"] = extract_topics_spacy(article["Summary"])
+        # Use NLTK-based topic extraction
+        article["Topics"] = extract_topics_nltk(article["Summary"])
     
     comp_analysis = comparative_analysis(articles)
     hindi_summary = generate_hindi_news_summary(articles)
