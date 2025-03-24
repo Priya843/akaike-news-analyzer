@@ -9,4 +9,3 @@ sumy
 googletrans==4.0.0-rc1
 spacy
 scikit-learn
-en-core-web-sm==3.5.0
