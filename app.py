@@ -25,8 +25,13 @@ nltk.download('vader_lexicon')
 from nltk.sentiment import SentimentIntensityAnalyzer
 sia = SentimentIntensityAnalyzer()
 
-# Load SpaCy model (make sure you have run: python -m spacy download en_core_web_sm)
-nlp = spacy.load("en_core_web_sm")
+# Load SpaCy model (if not available, download it)
+try:
+    nlp = spacy.load("en_core_web_sm")
+except OSError:
+    import subprocess
+    subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"], check=True)
+    nlp = spacy.load("en_core_web_sm")
 
 # Define the FastAPI app (named 'api' to avoid conflict with Streamlit's UI code)
 api = FastAPI()
